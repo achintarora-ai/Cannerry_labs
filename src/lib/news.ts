@@ -16,6 +16,11 @@ export const NEWS_SOURCES = [
     url: "https://www.microsoft.com/en-us/research/feed/",
     host: "microsoft.com",
   },
+  {
+    name: "Google AI",
+    url: "https://blog.google/technology/ai/rss/",
+    host: "blog.google",
+  },
 ] as const;
 export type NewsItem = {
   title: string;
@@ -79,7 +84,7 @@ export function parseNews(
           return [];
         const text = title + " " + clean(row.description ?? row.summary);
         if (
-          source.name === "Microsoft" &&
+          (source.name === "Microsoft" || source.name === "Google AI") &&
           !/\b(ai|artificial|machine learning|data|model|language|research|agent|neural)\b/i.test(
             text,
           )

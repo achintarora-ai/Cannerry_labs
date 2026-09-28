@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { siteConfig } from "@/data/site-config";
+import { brand } from "@/data/brand";
 
 export const dynamic = "force-static";
 
@@ -10,6 +10,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/api/"],
     },
-    sitemap: `${siteConfig.social.siteUrl}/sitemap.xml`,
+    sitemap: `${brand.siteUrl}/sitemap.xml`,
   };
 }

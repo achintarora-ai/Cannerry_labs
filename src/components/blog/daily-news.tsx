@@ -1,118 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowUpRight, RefreshCw, Radio } from "lucide-react";
 import { apiPath } from "@/lib/paths";
 import type { NewsFeed } from "@/lib/news";
+const publishers = ["All", "OpenAI", "Google AI", "NVIDIA", "Microsoft"];
 export function DailyNews() {
-  const [feed, setFeed] = useState<NewsFeed | null>(null);
-  const [error, setError] = useState("");
-  const [filter, setFilter] = useState("All");
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const abort = new AbortController();
-    async function load() {
-      try {
-        const response = await fetch(apiPath("/api/news"), {
-          signal: abort.signal,
-        });
-        if (!response.ok)
-          throw new Error(
-            "The live feed is temporarily unavailable. You can still visit the publishers below.",
-          );
-        setFeed(await response.json());
-        setError("");
-      } catch (e) {
-        if (!abort.signal.aborted)
-          setError(e instanceof Error ? e.message : "Unable to load updates.");
-      } finally {
-        if (!abort.signal.aborted) setLoading(false);
-      }
-    }
-    void load();
-    const timer = setInterval(() => {
-      if (!document.hidden) void load();
-    }, 15 * 60_000);
-    return () => {
-      abort.abort();
-      clearInterval(timer);
-    };
-  }, []);
-  return (
-    <div>
-      <div className="my-8 flex flex-wrap gap-2">
-        {["All", "OpenAI", "NVIDIA", "Microsoft"].map((name) => (
-          <button
-            key={name}
-            aria-pressed={filter === name}
-            onClick={() => setFilter(name)}
-            className={`rounded-full border px-4 py-2 text-sm ${filter === name ? "bg-[var(--foreground)] text-white" : "border-[var(--border)]"}`}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      {loading && <p role="status">Checking the publishers’ latest updates…</p>}
-      {error && (
-        <p role="status" className="rounded-xl border p-5">
-          {error}
-        </p>
-      )}
-      {feed && (
-        <>
-          <p className="mb-5 text-xs text-[var(--muted)]">
-            Checked {new Date(feed.checkedAt).toLocaleString()} ·{" "}
-            {feed.stale
-              ? "Some publishers unavailable; retained entries may be older."
-              : "Updates refresh automatically."}
-          </p>
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {feed.items
-              .filter((x) => filter === "All" || x.publisher === filter)
-              .map((item) => (
-                <a
-                  key={item.url}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex min-h-60 flex-col rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6"
-                >
-                  <p className="eyebrow">
-                    {item.publisher} / {item.topic}
-                  </p>
-                  <h2 className="my-5 font-[family-name:var(--font-display)] text-2xl leading-tight group-hover:underline">
-                    {item.title}
-                  </h2>
-                  <p className="mt-auto text-xs text-[var(--muted)]">
-                    {new Date(item.publishedAt).toLocaleDateString()} · Read at
-                    source ↗
-                  </p>
-                </a>
-              ))}
-          </div>
-          {feed.items.filter((x) => filter === "All" || x.publisher === filter)
-            .length === 0 && (
-            <p>No recent items available for this publisher.</p>
-          )}
-        </>
-      )}
-      <div className="mt-10 flex flex-wrap gap-5 text-sm">
-        <a href="https://openai.com/news/" target="_blank" rel="noreferrer">
-          OpenAI News ↗
-        </a>
-        <a
-          href="https://developer.nvidia.com/blog/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          NVIDIA Developer ↗
-        </a>
-        <a
-          href="https://www.microsoft.com/en-us/research/blog/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Microsoft Research ↗
-        </a>
-      </div>
-    </div>
-  );
+  const [feed,setFeed]=useState<NewsFeed|null>(null); const [error,setError]=useState(""); const [filter,setFilter]=useState("All"); const [loading,setLoading]=useState(true);
+  async function load(signal?:AbortSignal){setLoading(true);try{const response=await fetch(apiPath("/api/news"),{signal});if(!response.ok)throw new Error("The live feed is temporarily unavailable.");setFeed(await response.json());setError("");}catch(e){if(!signal?.aborted)setError(e instanceof Error?e.message:"Unable to load updates.");}finally{if(!signal?.aborted)setLoading(false)}}
+  useEffect(()=>{const abort=new AbortController();void load(abort.signal);const timer=setInterval(()=>{if(!document.hidden)void load()},15*60_000);return()=>{abort.abort();clearInterval(timer)}},[]);
+  const items=useMemo(()=>feed?.items.filter(item=>filter==="All"||item.publisher===filter)??[],[feed,filter]); const openAI=feed?.items.filter(item=>item.publisher==="OpenAI").slice(0,3)??[];
+  return <div className="news-desk">
+    <div className="news-toolbar"><div className="news-filters" role="group" aria-label="Filter news by publisher">{publishers.map(name=><button key={name} aria-pressed={filter===name} onClick={()=>setFilter(name)}>{name}</button>)}</div><button className="news-refresh" onClick={()=>void load()} disabled={loading}><RefreshCw size={14} className={loading?"is-spinning":""}/>{loading?"Checking":"Refresh now"}</button></div>
+    {error&&<div className="news-error" role="status"><Radio size={18}/><div><b>Live desk interrupted</b><p>{error} Official source links remain available below.</p></div></div>}
+    {filter==="All"&&openAI.length>0&&<section className="openai-focus"><div className="openai-focus-head"><div><span className="live-dot"/> OPENAI / LATEST SIGNALS</div><p>Official OpenAI newsroom</p></div><div className="openai-grid">{openAI.map((item,i)=><a href={item.url} target="_blank" rel="noopener noreferrer" key={item.url} className={i===0?"featured":""}><small>{item.topic} · {new Date(item.publishedAt).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</small><h2>{item.title}</h2><span>Read at OpenAI <ArrowUpRight size={14}/></span></a>)}</div></section>}
+    {feed&&<><div className="news-meta"><span><span className="live-dot"/> LIVE SOURCE MONITOR</span><p>Checked {new Date(feed.checkedAt).toLocaleString()} · {feed.stale?"Some sources are temporarily unavailable; retained entries may be older.":"All connected sources responded."}</p></div><div className="news-grid">{items.map((item,i)=><a className="news-card" href={item.url} target="_blank" rel="noopener noreferrer" key={item.url}><div className="news-card-top"><span>{String(i+1).padStart(2,"0")}</span><small>{item.publisher}</small></div><p>{item.topic}</p><h2>{item.title}</h2><div className="news-card-bottom"><time dateTime={item.publishedAt}>{new Date(item.publishedAt).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"})}</time><ArrowUpRight size={17}/></div></a>)}</div>{items.length===0&&!loading&&<p className="news-empty">No recent items are available for this publisher.</p>}</>}
+    <div className="source-row"><p>DIRECT FROM THE SOURCE</p><a href="https://openai.com/news/" target="_blank" rel="noreferrer">OpenAI <ArrowUpRight size={13}/></a><a href="https://blog.google/technology/ai/" target="_blank" rel="noreferrer">Google AI <ArrowUpRight size={13}/></a><a href="https://developer.nvidia.com/blog/" target="_blank" rel="noreferrer">NVIDIA <ArrowUpRight size={13}/></a><a href="https://www.microsoft.com/en-us/research/blog/" target="_blank" rel="noreferrer">Microsoft Research <ArrowUpRight size={13}/></a></div>
+  </div>;
 }

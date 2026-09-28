@@ -1,72 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
-import { siteConfig } from "@/data/site-config";
+import { brand } from "@/data/brand";
 
-const contactSchema = z.object({
+const schema = z.object({
   name: z.string().trim().min(2).max(80),
-  email: z.string().trim().email().max(120),
-  subject: z.string().trim().min(3).max(120),
-  message: z.string().trim().min(10).max(3000),
-  company: z.string().max(0).optional(), // honeypot
+  email: z.string().trim().email().max(160),
+  company: z.string().trim().min(2).max(120),
+  interest: z.string().trim().min(3).max(160),
+  message: z.string().trim().max(3000).optional().default(""),
+  website: z.string().max(0).optional(),
 });
 
-function clientKey(request: NextRequest) {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "anonymous"
-  );
-}
+function key(request: NextRequest) { return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "anonymous"; }
+const clean = (value: string) => value.replace(/[<>]/g, "");
 
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(`contact:${clientKey(request)}`, 5, 60_000);
-  if (!limited.success) {
-    return NextResponse.json(
-      { error: "Too many submissions. Please try again later." },
-      { status: 429 },
-    );
+  const limit = rateLimit(`canary-contact:${key(request)}`, 4, 10 * 60_000);
+  if (!limit.success) return NextResponse.json({ error: "Too many attempts. Please wait a few minutes and try again." }, { status: 429 });
+  let body: unknown;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "Invalid request." }, { status: 400 }); }
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "Please check the required fields and try again." }, { status: 400 });
+  if (parsed.data.website) return NextResponse.json({ message: "Thanks — your message is on its way." });
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.CONTACT_FROM_EMAIL;
+  if (!apiKey || !from) {
+    console.error("Contact delivery is not configured: RESEND_API_KEY and CONTACT_FROM_EMAIL are required.");
+    return NextResponse.json({ error: `Email delivery is not configured yet. Please email ${brand.email} directly.` }, { status: 503 });
   }
-
-  let json: unknown;
-  try {
-    json = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
-  }
-
-  const parsed = contactSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Please provide a valid name, email, subject, and message." },
-      { status: 400 },
-    );
-  }
-
-  // Honeypot triggered
-  if (parsed.data.company) {
-    return NextResponse.json({ ok: true });
-  }
-
-  const { name, email, subject, message } = parsed.data;
-
-  // No database in v1: log non-secret metadata only and return a mailto-ready payload.
-  console.info("Contact form submission received", {
-    name,
-    emailDomain: email.split("@")[1] ?? "unknown",
-    subjectLength: subject.length,
-    messageLength: message.length,
-    to: siteConfig.email,
+  const data = parsed.data;
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: [brand.email], reply_to: data.email, subject: `[Canary Labs inquiry] ${clean(data.company)} — ${clean(data.interest)}`, text: `Name: ${data.name}\nWork email: ${data.email}\nCompany: ${data.company}\nInterest: ${data.interest}\n\nMessage:\n${data.message || "No additional message."}` }),
   });
-
-  return NextResponse.json({
-    ok: true,
-    message:
-      "Your email draft is ready. Open your email app and send it to complete your message. This endpoint does not deliver email.",
-    mailto: `mailto:${siteConfig.email}?subject=${encodeURIComponent(
-      `[Portfolio] ${subject}`,
-    )}&body=${encodeURIComponent(
-      `From: ${name} <${email}>\n\n${message}`,
-    )}`,
-  });
+  if (!response.ok) {
+    console.error("Resend rejected a contact delivery", { status: response.status });
+    return NextResponse.json({ error: `We could not deliver that message. Please email ${brand.email} directly.` }, { status: 502 });
+  }
+  return NextResponse.json({ message: "Thanks — your message has been delivered. We’ll reply by email." });
 }

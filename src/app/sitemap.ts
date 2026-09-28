@@ -1,38 +1,11 @@
 import type { MetadataRoute } from "next";
-import { blogPosts } from "@/data/blogs";
-import { projects } from "@/data/projects";
-import { siteConfig } from "@/data/site-config";
+import { brand } from "@/data/brand";
 
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = siteConfig.social.siteUrl;
-  const staticRoutes = [
-    "",
-    "/skills",
-    "/experience",
-    "/projects",
-    "/blogs",
-    "/daily",
-    "/research",
-    "/handbook",
-    "/assistant",
-    "/resume",
-    "/contact",
-  ].map((path) => ({
-    url: `${base}${path}`,
+  return ["", "/news", "/privacy"].map((path) => ({
+    url: `${brand.siteUrl}${path}`,
     lastModified: new Date(),
   }));
-
-  const projectRoutes = projects.map((project) => ({
-    url: `${base}/projects/${project.slug}`,
-    lastModified: new Date(),
-  }));
-
-  const blogRoutes = blogPosts.map((post) => ({
-    url: `${base}/blogs/${post.slug}`,
-    lastModified: new Date(post.date),
-  }));
-
-  return [...staticRoutes, ...projectRoutes, ...blogRoutes];
 }
