@@ -4,8 +4,8 @@ import { ArrowUpRight, RefreshCw, Radio } from "lucide-react";
 import { apiPath } from "@/lib/paths";
 import type { NewsFeed } from "@/lib/news";
 const publishers = ["All", "OpenAI", "Google AI", "NVIDIA", "Microsoft"];
-export function DailyNews() {
-  const [feed,setFeed]=useState<NewsFeed|null>(null); const [error,setError]=useState(""); const [filter,setFilter]=useState("All"); const [loading,setLoading]=useState(true);
+export function DailyNews({initialFeed=null}:{initialFeed?:NewsFeed|null}) {
+  const [feed,setFeed]=useState<NewsFeed|null>(initialFeed); const [error,setError]=useState(""); const [filter,setFilter]=useState("All"); const [loading,setLoading]=useState(!initialFeed);
   async function load(signal?:AbortSignal){setLoading(true);try{const response=await fetch(apiPath("/api/news"),{signal});if(!response.ok)throw new Error("The live feed is temporarily unavailable.");setFeed(await response.json());setError("");}catch(e){if(!signal?.aborted)setError(e instanceof Error?e.message:"Unable to load updates.");}finally{if(!signal?.aborted)setLoading(false)}}
   useEffect(()=>{const abort=new AbortController();void load(abort.signal);const timer=setInterval(()=>{if(!document.hidden)void load()},15*60_000);return()=>{abort.abort();clearInterval(timer)}},[]);
   const items=useMemo(()=>feed?.items.filter(item=>filter==="All"||item.publisher===filter)??[],[feed,filter]); const openAI=feed?.items.filter(item=>item.publisher==="OpenAI").slice(0,3)??[];
